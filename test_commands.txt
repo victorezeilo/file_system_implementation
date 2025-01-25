@@ -1,0 +1,129 @@
+// These commands are examples of the functionality being tested.
+// During submission, a more comprehensive automatic test program will be run,
+// so make sure to test other execution cases as well.
+
+// Preferably start each sequence with format
+format
+// Should list an empty directory
+ls
+// Check pwd in the root, only "/" should be output
+pwd
+ 
+// File "a" does not exist, should give an error message
+cat a
+// Create the file "a"
+create a
+hej heja hejare
+
+// Verify that the file exists and has the correct content
+ls
+cat a
+
+// Create another file and verify that it has the correct content
+create a2
+hej heja hejare hejast
+
+ls
+cat a2
+
+// Test the append functionality
+append a a2
+// Verify that "a" is unchanged and that "a2" has the following content
+cat a2
+// Expected output:
+hej heja hejare hejast
+hej heja hejare
+// Also verify that when doing append, the source
+// must have read permissions, and the destination must have both read and write permissions
+// Ensure that append gives an error message if these conditions are not met
+
+// Check that cp and mv work in the same directory
+cp a a3
+// Verify that the directory now contains three files: a, a2, and a3
+ls
+// Verify that a3 has the same content as a
+cat a3
+// Expected output:
+hej heja hejare
+
+mv a2 a4
+// Verify that the directory now contains three files: a, a3, and a4
+ls
+// Verify that a4 contains the same content as a2 did previously
+cat a4
+// Expected output:
+hej heja hejare hejast
+hej heja hejare
+
+// Verify that mv and cp do not overwrite existing files
+// The following should give an error message
+cp a a4
+mv a a4
+
+// Verify that directories can be created
+mkdir d1
+ls
+// Should give an error message when attempting to create another directory with the same name
+mkdir d1
+ls
+// It should not be possible to create directories with the same name as existing files
+// or create files with the same name as existing directories
+// Both of the following should give an error message
+mkdir a
+create d1
+// Verify that nothing unusual has been created
+ls
+// Verify that it is possible to delete a file
+rm a
+ls
+// Now the file "a" should be deleted
+
+// Verify that cd / pwd works
+mkdir d2
+ls
+cd d2
+// Verify that you are in the correct place (pwd should output "/d2", and ls should show an empty directory)
+pwd
+ls
+
+// Go back to the root directory
+cd ..
+pwd
+// rm on a directory should give an error message, verify that the directory remains
+rm d2
+ls
+
+// Verify that chmod works by alternately setting and removing
+// read and write permissions, and check with, for example, cat and append that error messages
+// are output
+chmod 6 a2
+ls
+append a a2
+ls
+
+// Verify that absolute and relative paths work
+// Start by creating a directory structure, starting in the root
+// d1 and d2 should already exist
+// The following are examples of commands that should work (not exhaustive)
+cd /
+mkdir /d3
+mkdir d4
+cd /d4  // Also verify cd with relative path
+mkdir ../d5
+create f1
+// You should now be in the directory "/d4" and it should contain a file "f1". Verify with pwd and ls
+// Create three copies of f1
+cp f1 f2
+cp f1 f3
+cp f1 f4
+// Verify that absolute and relative paths work for cp / mv,
+// and that the destination path can be a directory name, for example:
+cp f1 /d3
+cp f2 ../d3
+mv f3 /d3
+mv f4 ../d3
+// Verify that the correct files remain in /d4 (should be f1 and f2)
+// Verify that the correct files are in /d3 (should be f1, f2, f3, f4)
+
+// Finish
+quit

@@ -1,0 +1,4 @@
+filesystem
+*.o
+*.out
+diskfile.bin
