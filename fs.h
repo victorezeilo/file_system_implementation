@@ -29,6 +29,12 @@ private:
     Disk disk;
     // size of a FAT entry is 2 bytes
     int16_t fat[BLOCK_SIZE/2];
+    // helper function to read the directory
+    dir_entry* read_directory(uint8_t* dir_blk);
+    // helper function to write the directory
+    int write_fat_to_disk();
+
+
 
 public:
     FS();
@@ -67,6 +73,17 @@ public:
     // chmod <accessrights> <filepath> changes the access rights for the
     // file <filepath> to <accessrights>.
     int chmod(std::string accessrights, std::string filepath);
+
+    // Helper function to find a file in the directory
+    int find_file(const std::string &filepath, dir_entry &file_entry);
+    // Helper function to allocate a free block
+    int allocate_block();
+    // Helper function to copy the file content block-by-block
+    bool copy_file(int source_block, int dest_block);
+    // Helper function to marks all blocks used by a file as free in the FAT
+    void free_blocks(int first_block);
+    // Helper function to find the last block of a file
+    int find_last_block(int first_block);
 };
 
 #endif // __FS_H__
