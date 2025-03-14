@@ -33,6 +33,7 @@ private:
     dir_entry* read_directory(uint8_t* dir_blk);
     // helper function to write the directory
     int write_fat_to_disk();
+    uint16_t current_directory;
 
 
 
