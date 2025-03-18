@@ -291,13 +291,13 @@ FS::ls() {
     dir_entry* dir_entries = read_directory(dir_blk);
     if (!dir_entries) return -1;
 
-    std::cout << "name\ttype\tsize\n";
+    std::cout << "name\t type\t size\n";
 
     // print the directory first
     for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
         if (dir_entries[i].file_name[0] != '\0' && dir_entries[i].type == TYPE_DIR) { // check if the entry is a directory
             if (std::strcmp(dir_entries[i].file_name, "..") != 0) { // skip the '..' entry
-                std::cout << dir_entries[i].file_name << "\tdir\t-\n"; // print the directory name
+                std::cout << dir_entries[i].file_name << "\t dir\t -\n"; // print the directory name
             }
         }
     }
@@ -305,7 +305,7 @@ FS::ls() {
     // print the files next
     for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
         if (dir_entries[i].file_name[0] != '\0' && dir_entries[i].type == 0) { // check if the entry is a file
-            std::cout << dir_entries[i].file_name << "\tfile\t" << dir_entries[i].size << "\n"; // print the file name and size
+            std::cout << dir_entries[i].file_name << "\t file\t " << dir_entries[i].size << "\n"; // print the file name and size
         }
     }
    
@@ -331,203 +331,34 @@ int
 FS::cp(std::string sourcefilename, std::string destfilename) {
     // std::cout << "FS::cp(" << sourcefilename << ", " << destfilename << ")...\n";
 
-    // Step 1: Read the current directory block
+    // Read the current directory block
     uint8_t dir_blk[BLOCK_SIZE];
     dir_entry* dir_entries = read_directory(dir_blk);
     if (!dir_entries) return -1;
 
-    // Step 2: Locate the source file
-    int src_index = -1;
-    for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-        if (dir_entries[i].file_name[0] != '\0' && sourcefilename == dir_entries[i].file_name) {
-            src_index = i;
-            break;
-        }
-    }
-
+    // Locate the source file
+    int src_index = find_entry_by_name(dir_entries, sourcefilename);
     if (src_index == -1) {
         std::cerr << "FS::cp()... Source file not found\n";
         return -1;
     }
 
-    // Step 3: Check if destination exists in current directory
-    int dest_index = -1;
-    for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-        if (dir_entries[i].file_name[0] != '\0' && destfilename == dir_entries[i].file_name) {
-            dest_index = i;
-            break;
-        }
-    }
+    // Check if destination exists in current directory
+    int dest_index = find_entry_by_name(dir_entries, destfilename);
 
-    // Step 4: If destfilename is a directory, move inside it!
+    // If destfilename is a directory, move inside it!
     if (dest_index != -1 && dir_entries[dest_index].type == 1) {
-        // Read the destination directory block
-        uint8_t dest_dir_blk[BLOCK_SIZE];
-        if (disk.read(dir_entries[dest_index].first_blk, dest_dir_blk) != 0) {
-            std::cerr << "FS::cp()... Error reading destination directory block\n";
-            return -1;
-        }
-
-        dir_entry* dest_dir_entries = reinterpret_cast<dir_entry*>(dest_dir_blk);
-
-        // Check if file already exists in the destination directory
-        for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-            if (dest_dir_entries[i].file_name[0] != '\0' && sourcefilename == dest_dir_entries[i].file_name) {
-                std::cerr << "FS::cp()... File already exists in destination directory\n";
-                return -1;
-            }
-        }
-
-        // Find free entry in the destination directory
-        int free_index = -1;
-        for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-            if (dest_dir_entries[i].file_name[0] == '\0') {
-                free_index = i;
-                break;
-            }
-        }
-
-        if (free_index == -1) {
-            std::cerr << "FS::cp()... No space in destination directory\n";
-            return -1;
-        }
-
-        // Allocate blocks for the new file data
-        int first_new_block = allocate_block();
-        if (first_new_block == -1) {
-            std::cerr << "FS::cp()... No space on disk\n";
-            return -1;
-        }
-
-        // Copy file data block by block
-        int src_block = dir_entries[src_index].first_blk;
-        int dest_last_block = first_new_block;
-        uint8_t block[BLOCK_SIZE];
-
-        while (src_block != FAT_EOF) {
-            if (disk.read(src_block, block) != 0) {
-                std::cerr << "FS::cp()... Error reading source block\n";
-                return -1;
-            }
-
-            if (disk.write(dest_last_block, block) != 0) {
-                std::cerr << "FS::cp()... Error writing to destination block\n";
-                return -1;
-            }
-
-            src_block = fat[src_block];
-
-            if (src_block != FAT_EOF) {
-                int next_block = allocate_block();
-                if (next_block == -1) {
-                    std::cerr << "FS::cp()... No space on disk during copy\n";
-                    return -1;
-                }
-
-                fat[dest_last_block] = next_block;
-                dest_last_block = next_block;
-            }
-        }
-
-        fat[dest_last_block] = FAT_EOF;
-
-        // Add new entry in the destination directory
-        strncpy(dest_dir_entries[free_index].file_name, sourcefilename.c_str(), sizeof(dest_dir_entries[free_index].file_name) - 1);
-        dest_dir_entries[free_index].size = dir_entries[src_index].size;
-        dest_dir_entries[free_index].first_blk = first_new_block;
-        dest_dir_entries[free_index].type = 0; // file type
-        dest_dir_entries[free_index].access_rights = dir_entries[src_index].access_rights;
-
-        // Write updated destination directory block
-        if (disk.write(dir_entries[dest_index].first_blk, dest_dir_blk) != 0) {
-            std::cerr << "FS::cp()... Error writing destination directory block\n";
-            return -1;
-        }
-
-        // Update FAT on disk
-        write_fat_to_disk();
-
-        // std::cout << "FS::cp()... File copied successfully to directory " << destfilename << "\n";
-        return 0;
+       // destination is a directory
+        return cp_into_dir(dir_entries[src_index], dir_entries[dest_index].first_blk);
     }
 
-    // Step 5: If destfilename is a new filename in current dir, perform regular copy
+    // If destfilename is a new filename in current dir, perform regular copy
     if (dest_index != -1) {
         std::cerr << "FS::cp()... Destination file already exists\n";
         return -1;
     }
 
-    // Find free entry in current directory
-    int free_index = -1;
-    for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-        if (dir_entries[i].file_name[0] == '\0') {
-            free_index = i;
-            break;
-        }
-    }
-
-    if (free_index == -1) {
-        std::cerr << "FS::cp()... No space in current directory\n";
-        return -1;
-    }
-
-    // Allocate blocks for the new file data
-    int first_new_block = allocate_block();
-    if (first_new_block == -1) {
-        std::cerr << "FS::cp()... No space on disk\n";
-        return -1;
-    }
-
-    // Copy file data block by block
-    int src_block = dir_entries[src_index].first_blk;
-    int dest_last_block = first_new_block;
-    uint8_t block[BLOCK_SIZE];
-
-    while (src_block != FAT_EOF) {
-        if (disk.read(src_block, block) != 0) {
-            std::cerr << "FS::cp()... Error reading source block\n";
-            return -1;
-        }
-
-        if (disk.write(dest_last_block, block) != 0) {
-            std::cerr << "FS::cp()... Error writing to destination block\n";
-            return -1;
-        }
-
-        src_block = fat[src_block];
-
-        if (src_block != FAT_EOF) {
-            int next_block = allocate_block();
-            if (next_block == -1) {
-                std::cerr << "FS::cp()... No space on disk during copy\n";
-                return -1;
-            }
-
-            fat[dest_last_block] = next_block;
-            dest_last_block = next_block;
-        }
-    }
-
-    fat[dest_last_block] = FAT_EOF;
-
-    // Add new entry in current directory
-    strncpy(dir_entries[free_index].file_name, destfilename.c_str(), sizeof(dir_entries[free_index].file_name) - 1);
-    dir_entries[free_index].size = dir_entries[src_index].size;
-    dir_entries[free_index].first_blk = first_new_block;
-    dir_entries[free_index].type = 0; // file type
-    dir_entries[free_index].access_rights = dir_entries[src_index].access_rights;
-
-    // Write updated current directory block
-    if (disk.write(current_directory, dir_blk) != 0) {
-        std::cerr << "FS::cp()... Error writing current directory block\n";
-        return -1;
-    }
-
-    // Update FAT on disk
-    write_fat_to_disk();
-
-    // std::cout << "FS::cp()... File copied successfully as " << destfilename << "\n";
-    return 0;
+    return cp_into_dir(dir_entries[src_index], current_directory, destfilename);
 }
 
 
@@ -554,75 +385,27 @@ FS::mv(std::string sourcepath, std::string destpath)
     if (!dir_entries) return -1;                         // cast the block to dir_entry
 
     // find the source file in the directory
-    int source_index = -1;
-    for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-        if (dir_entries[i].file_name[0] != '\0' && sourcepath == dir_entries[i].file_name) {
-            source_index = i;
-            break;
-        }
-    }
-
+    int source_index = find_entry_by_name(dir_entries, sourcepath);
     if (source_index == -1) {
-        std::cerr << "FS::mv()... Source file not found\n";
         return -1;
     }
 
 
     // check if the destination file already exists
-    int dest_index = -1;
-    for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-        if (dir_entries[i].file_name[0] != '\0' && destpath == dir_entries[i].file_name) {
-            dest_index = i;
-            break;
-        }
-    }
+    int dest_index = find_entry_by_name(dir_entries, destpath);
 
     // if destination file is a directory, move the source file inside it
     if (dest_index != -1 && dir_entries[dest_index].type == TYPE_DIR) {
-        // read the destination directory block
-        uint8_t dest_dir_blk[BLOCK_SIZE];
-        if (disk.read(dir_entries[dest_index].first_blk, dest_dir_blk) != 0) {
-            std::cerr << "FS::mv()... Error reading destination directory block\n";
+        // mpve into the directory
+        if (cp_into_dir(dir_entries[source_index], dir_entries[dest_index].first_blk) != 0) {
+            std::cerr << "FS::mv()... Error moving file to directory\n";
             return -1;
         }
 
-        dir_entry* dest_dir_entries = reinterpret_cast<dir_entry*>(dest_dir_blk);
+        // remove the source file
+        std::memset(&dir_entries[source_index], 0, sizeof(dir_entry));                 // clear the source file entry
 
-        // check if the file already exists in the destination directory
-        for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-            if (dest_dir_entries[i].file_name[0] != '\0' && sourcepath == dest_dir_entries[i].file_name) {
-                std::cerr << "FS::mv()... File already exists in destination directory\n";
-                return -1;
-            }
-        }
-
-        // find a free entry in the destination directory
-        int free_index = -1;
-        for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-            if (dest_dir_entries[i].file_name[0] == '\0') {
-                free_index = i;
-                break;
-            }
-        }
-
-        if (free_index == -1) {
-            std::cerr << "FS::mv()... No space in destination directory\n";
-            return -1;
-        }
-
-        // move the file to the destination directory
-        dest_dir_entries[free_index] = dir_entries[source_index];       // copy the source file to the destination directory
-
-        // clear the source file
-        std::memset(&dir_entries[source_index], 0, sizeof(dir_entry));
-
-        // write updated destination directory to the disk
-        if (disk.write(dir_entries[dest_index].first_blk, dest_dir_blk) != 0) {
-            std::cerr << "FS::mv()... Error writing destination directory block\n";
-            return -1;
-        }
-
-        // write update current directory to the disk
+        // write the root directory to the disk
         if (disk.write(current_directory, dir_blk) != 0) {
             std::cerr << "FS::mv()... Error writing root directory to disk\n";
             return -1;
@@ -639,9 +422,7 @@ FS::mv(std::string sourcepath, std::string destpath)
     }
 
     // rename the file
-    std::memset(dir_entries[source_index].file_name, 0, sizeof(dir_entries[source_index].file_name));                       // clear the source file name
-    std::strncpy(dir_entries[source_index].file_name, destpath.c_str(), sizeof(dir_entries[source_index].file_name) - 1);   // set the destination file name
-
+    std::strncpy(dir_entries[source_index].file_name, destpath.c_str(), sizeof(dir_entries[source_index].file_name) - 1);
 
     // write the root directory to the disk
     if (disk.write(current_directory, dir_blk) != 0) {
@@ -1176,4 +957,103 @@ int FS::find_last_block(int first_block)
         current_block = fat[current_block];              // get the next block
     }
     return current_block;                                // return the last block
+}
+
+// helper function to find an entry in the directory by name
+int FS::find_entry_by_name(dir_entry* entries, const std::string& name)
+
+{
+    for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {  // iterate over the directory entries
+        if (std::strcmp(entries[i].file_name, name.c_str()) == 0) { // check if the file exists
+            return i;                                             // return the index
+        }
+    }
+    return -1; // return -1 if the file is not found
+}
+
+// helper function to handle cp into a directory (both cp source and dest dir given)
+int FS::cp_into_dir(dir_entry src_entry, uint16_t dest_dir_block, std::string new_filename) {
+    uint8_t dest_dir_blk[BLOCK_SIZE];
+    if (disk.read(dest_dir_block, dest_dir_blk) != 0) {
+        return -1;
+    }
+
+    dir_entry* dest_dir_entries = reinterpret_cast<dir_entry*>(dest_dir_blk);                   // cast the block to dir_entry
+
+    int free_index = find_empty_slot(dest_dir_entries);                                        // find an empty slot in the directory
+
+    if (free_index == -1) {
+        return -1;
+    }
+
+    dir_entry new_entry = src_entry;                                                          // copy the source entry
+    if (new_filename != "") {
+        strncpy(new_entry.file_name, new_filename.c_str(), sizeof(new_entry.file_name) - 1);  // set the new filename
+    }
+
+    if (copy_file_content(src_entry.first_blk, new_entry.first_blk, new_entry.size) != 0) {                   // copy the file contents
+        return -1;
+    }
+
+    dest_dir_entries[free_index] = new_entry;                                                // add the new entry to the directory
+
+    if (disk.write(dest_dir_block, dest_dir_blk) != 0) {                                      // write the updated directory to the disk
+        return -1;
+    }
+
+    write_fat_to_disk();                                                                     // update the FAT on the disk
+    return 0;
+}
+
+// helper function to find an empty slot in the directory
+int FS::find_empty_slot(dir_entry* entries) {
+    for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {  // iterate over the directory entries
+        if (entries[i].file_name[0] == '\0') {                   // check if the entry is empty
+            return i;                                           // return the index
+        }
+    }
+    return -1; // return -1 if the slot is not found
+}
+
+// helper function to copy the file contents
+int FS::copy_file_content(uint16_t src_first_blk, uint16_t& dest_first_blk, uint32_t& file_size) {
+    uint8_t block[BLOCK_SIZE];
+    int src_block = src_first_blk;
+    int dest_block = allocate_block();
+
+    if (dest_block == -1) {
+        std::cerr << "FS::cp()... No space on disk\n";
+        return -1;
+    }
+
+    dest_first_blk = dest_block;                                    // set the first block of the destination file
+    int prev_dest_block = dest_block;                               // set the previous destination block
+
+    while (src_block != FAT_EOF) {
+        if (disk.read(src_block, block) != 0) {                     // read the source block
+            std::cerr << "FS::cp()... Error reading source block\n";
+            return -1;
+        }
+
+        if (disk.write(dest_block, block) != 0) {                   // write the block to the disk
+            std::cerr << "FS::cp()... Error writing to destination block\n";
+            return -1;
+        }
+
+        src_block = fat[src_block];                                 // get the next source block
+
+        if (src_block != FAT_EOF) {                                 // check if the block is not the last block
+            int next_block = allocate_block();                      // allocate a new block
+            if (next_block == -1) {                                 // check if there is enough space on the disk
+                std::cerr << "FS::cp()... No space on disk during copy\n";
+                return -1;
+            }
+
+            fat[prev_dest_block] = next_block;                      // update the FAT
+            prev_dest_block = next_block;                           // set the previous destination block
+        }
+    }
+
+    fat[prev_dest_block] = FAT_EOF;                                 // mark the last block as the last block
+    return 0;
 }

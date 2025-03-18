@@ -33,6 +33,16 @@ private:
     dir_entry* read_directory(uint8_t* dir_blk);
     // helper function to write the directory
     int write_fat_to_disk();
+    // Helper function to find an entry in the directory by name
+    int find_entry_by_name(dir_entry* entries, const std::string &name);
+    // Helper function to find an empty slot in the directory
+    int find_empty_slot(dir_entry* entries);
+    // Helper function to copy a directory entry into a destination directory block
+    int copy_entry_to_dir_block(dir_entry* source, uint8_t* dest_dir_blk);
+    // Helper function to copy file content from source to destination (used by cp)
+    int copy_file_content(uint16_t source_first_block, uint16_t& dest_first_block, uint32_t& file_size);
+    // helper function to handle cp into a directory (both cp source and dest dir given)
+    int cp_into_dir(dir_entry source_entry, uint16_t dest_dir_block, std::string new_file_name = "");
     uint16_t current_directory;
 
 
