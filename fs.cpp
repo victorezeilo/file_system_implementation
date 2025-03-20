@@ -855,9 +855,9 @@ FS::cd(std::string dirpath)
     // use resolve_path to find the parent directory and target name
     std::pair<int, std::string> result = resolve_path(dirpath, true, false);         // Resolve the source path
 
-    int parent_block = result.first;
-    std::string target_name = result.second;
-    if (parent_block == -1) {
+    int parent_block = result.first;                            // get the parent block
+    std::string target_name = result.second;            // get the target name
+    if (parent_block == -1) {                        // check if the parent block is valid
         std::cerr << "FS::cd()... Error resolving path\n";
         return -1;
     }
@@ -1189,13 +1189,13 @@ std::vector<std::string> split_path(const std::string& path) {
     std::vector<std::string> result;
     std::stringstream ss(path);
     std::string item;
-    while (std::getline(ss, item, '/')) {
-        if (!item.empty()) result.push_back(item);
+    while (std::getline(ss, item, '/')) {               // split the path by '/'
+        if (!item.empty()) result.push_back(item);      // add the item to the result
     }
     return result;
 }
 
-// Fully fixed resolve_path implementation for C++11
+// Resolve_path implementation
 // Returns <block number, last component name>
 // If return_parent is true, it returns the parent directory of the target
 std::pair<int, std::string> FS::resolve_path(const std::string& path, bool is_dir, bool return_parent) {
@@ -1217,12 +1217,12 @@ std::pair<int, std::string> FS::resolve_path(const std::string& path, bool is_di
 
     // If return_parent, stop before the last component
     size_t end_index = components.size();
-    if (return_parent && end_index > 0) {
+    if (return_parent && end_index > 0) {               // If return_parent is true and we have components
         end_index--;
     }
 
     // Traverse the path components
-    for (size_t i = 0; i < end_index; ++i) {
+    for (size_t i = 0; i < end_index; ++i) {        // Iterate over the components
         const std::string& comp = components[i];
 
         if (comp == ".") {
@@ -1234,26 +1234,26 @@ std::pair<int, std::string> FS::resolve_path(const std::string& path, bool is_di
                 return {-1, ""};
             }
 
-            dir_entry* dir_entries = reinterpret_cast<dir_entry*>(dir_blk);
+            dir_entry* dir_entries = reinterpret_cast<dir_entry*>(dir_blk);             // cast the block to dir_entry
             current_block = dir_entries[0].first_blk; // '..' always points to parent
 
         } else {
             // Move to the subdirectory
-            uint8_t dir_blk[BLOCK_SIZE];
-            if (disk.read(current_block, dir_blk) != 0) {
+            uint8_t dir_blk[BLOCK_SIZE];                                                // create a block to store the directory
+            if (disk.read(current_block, dir_blk) != 0) {                              // read the directory
                 return {-1, ""};
             }
 
-            dir_entry* dir_entries = reinterpret_cast<dir_entry*>(dir_blk);
+            dir_entry* dir_entries = reinterpret_cast<dir_entry*>(dir_blk);             // cast the block to dir_entry
             bool found = false;
 
-            for (int j = 0; j < BLOCK_SIZE / sizeof(dir_entry); ++j) {
-                if (dir_entries[j].file_name[0] != '\0' && comp == dir_entries[j].file_name) {
-                    if (dir_entries[j].type != TYPE_DIR) {
+            for (int j = 0; j < BLOCK_SIZE / sizeof(dir_entry); ++j) {                  // iterate over the directory entries
+                if (dir_entries[j].file_name[0] != '\0' && comp == dir_entries[j].file_name) {  // check if the component is found
+                    if (dir_entries[j].type != TYPE_DIR) {                                        
                         // Not a directory when we expect one
                         return {-1, ""};
                     }
-                    current_block = dir_entries[j].first_blk;
+                    current_block = dir_entries[j].first_blk;               // set the current block
                     found = true;
                     break;
                 }
@@ -1269,7 +1269,7 @@ std::pair<int, std::string> FS::resolve_path(const std::string& path, bool is_di
     std::string last_component = "";
 
     // If return_parent is true and we already handled root
-    if (return_parent) {
+    if (return_parent) {                
         if (components.empty()) {
             // Can't resolve the parent of nothing
             return {-1, ""};
