@@ -43,6 +43,8 @@ private:
     int copy_file_content(uint16_t source_first_block, uint16_t& dest_first_block, uint32_t& file_size);
     // helper function to handle cp into a directory (both cp source and dest dir given)
     int cp_into_dir(dir_entry source_entry, uint16_t dest_dir_block, std::string new_file_name = "");
+    // Helper function to resolve a path to a directory block
+    std::pair<int, std::string> resolve_path(const std::string& path, bool is_dir = true, bool return_parent = false);
     uint16_t current_directory;
 
 
