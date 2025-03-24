@@ -68,8 +68,8 @@ Shell::run()
     std::cout << "Expected output:" << std::endl;
     std::cout << "/" << std::endl;
     std::cout << "name\t type\t accessrights\t size" << std::endl;
-    std::cout << "f1\t file\t rw-\t 16" << std::endl;
-    std::cout << "f2\t file\t rw-\t 23" << std::endl;
+    std::cout << "f1\t file\t rw-\t\t 16" << std::endl;
+    std::cout << "f2\t file\t rw-\t\t 23" << std::endl;
     std::cout << "Actual output:" << std::endl;
     filesystem.pwd();
     filesystem.ls();
@@ -90,8 +90,8 @@ Shell::run()
     std::cout << "Expected output:" << std::endl;
     std::cout << "/" << std::endl;
     std::cout << "name\t type\t accessrights\t size" << std::endl;
-    std::cout << "f1\t file\t -w-\t 16" << std::endl;
-    std::cout << "f2\t file\t r-\t 23" << std::endl;
+    std::cout << "f1\t file\t -w-\t\t 16" << std::endl;
+    std::cout << "f2\t file\t r-\t\t 23" << std::endl;
     std::cout << "Actual output:" << std::endl;
     filesystem.ls();
 
@@ -113,8 +113,8 @@ Shell::run()
     std::cout << "append(f2,f1)..." << std::endl;
     std::cout << "Expected output:" << std::endl;
     std::cout << "name\t type\t accessrights\t size" << std::endl;
-    std::cout << "f1\t file\t -w-\t 39" << std::endl;
-    std::cout << "f2\t file\t r-\t 23" << std::endl;
+    std::cout << "f1\t file\t -w-\t\t 39" << std::endl;
+    std::cout << "f2\t file\t r-\t\t 23" << std::endl;
     std::cout << "Actual output:" << std::endl;
     filesystem.append(arg2, arg1);
     filesystem.ls();

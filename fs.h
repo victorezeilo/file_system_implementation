@@ -45,6 +45,7 @@ private:
     int cp_into_dir(dir_entry source_entry, uint16_t dest_dir_block, std::string new_file_name = "");
     // Helper function to resolve a path to a directory block
     std::pair<int, std::string> resolve_path(const std::string& path, bool is_dir = true, bool return_parent = false);
+    std::string get_access_rights_str(uint8_t rights);
     uint16_t current_directory;
 
 

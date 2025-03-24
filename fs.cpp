@@ -233,6 +233,7 @@ FS::cat(std::string filepath)
     int file_block = -1;
     int file_size = 0;
     int file_type = -1;
+    uint8_t file_access_rights = 0; // store access rights for permission check
 
     // find the file in the directory
     for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {                              // iterate over the directory entries
@@ -240,6 +241,7 @@ FS::cat(std::string filepath)
             file_block = dir_entries[i].first_blk;                                          // get the first block
             file_size = dir_entries[i].size;                                               // get the file size
             file_type = dir_entries[i].type;                                                // get the file type
+            file_access_rights = dir_entries[i].access_rights;                               // get the access rights
             break;
         }
     }
@@ -251,6 +253,11 @@ FS::cat(std::string filepath)
 
     if (file_type == TYPE_DIR) {                                                            // check if the file is a directory
         std::cerr << "FS::cat()... Cannot cat a directory\n";
+        return -1;
+    }
+
+    if (!(file_access_rights & READ)) {
+        std::cerr << "FS::cat()... Read permission denied on file: " << filepath << "\n";
         return -1;
     }
 
@@ -293,24 +300,19 @@ FS::ls() {
     dir_entry* dir_entries = read_directory(dir_blk);
     if (!dir_entries) return -1;
 
-    std::cout << "name\t type\t size\n";
+    std::cout << "name\t type\t accessrights\t size\n";
 
     // print the directory first
     for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-        if (dir_entries[i].file_name[0] != '\0' && dir_entries[i].type == TYPE_DIR) { // check if the entry is a directory
-            if (std::strcmp(dir_entries[i].file_name, ".") != 0 && std::strcmp(dir_entries[i].file_name, "..") != 0) { // skip the '..' entry
-                std::cout << dir_entries[i].file_name << "\t dir\t -\n"; // print the directory name
-            }
-        }
-    }
+        if (dir_entries[i].file_name[0] != '\0') { // check if the entry is a directory
+            std::string type = (dir_entries[i].type == 0) ? "file" : "dir"; // check the type of the entry
+            std::string access_rights = get_access_rights_str(dir_entries[i].access_rights); // get the access rights
+            std::string size = (dir_entries[i].type == 0) ? std::to_string(dir_entries[i].size) : "-"; // get the size of the entry
 
-    // print the files next
-    for (int i = 0; i < BLOCK_SIZE / sizeof(dir_entry); ++i) {
-        if (dir_entries[i].file_name[0] != '\0' && dir_entries[i].type == 0) { // check if the entry is a file
-            std::cout << dir_entries[i].file_name << "\t file\t " << dir_entries[i].size << "\n"; // print the file name and size
+
+            std::cout << dir_entries[i].file_name << "\t " << type << "\t " << access_rights << "\t\t " << size << "\n"; // print the directory entry
         }
-    }
-   
+    }   
 
     return 0;
 }
@@ -634,7 +636,8 @@ FS::rm(std::string filepath)
 // Step 7. Update the FAT
 // ------------------------------------------------------------------------
  
-int FS::append(std::string filepath1, std::string filepath2)
+int 
+FS::append(std::string filepath1, std::string filepath2)
 {
     // Step 1: Find the source and destination files
     dir_entry source_entry, dest_entry;
@@ -650,6 +653,16 @@ int FS::append(std::string filepath1, std::string filepath2)
     // Ensure both are files
     if (source_entry.type != TYPE_FILE || dest_entry.type != TYPE_FILE) {
         std::cerr << "FS::append()... Invalid file type\n";
+        return -1;
+    }
+
+    // Check access rights!
+    if (!(source_entry.access_rights & READ)) {
+        std::cerr << "FS::append()... Read permission denied on source file: " << filepath1 << "\n";
+        return -1;
+    }
+    if (!(dest_entry.access_rights & WRITE)) {
+        std::cerr << "FS::append()... Write permission denied on destination file: " << filepath2 << "\n";
         return -1;
     }
 
@@ -741,7 +754,7 @@ int FS::append(std::string filepath1, std::string filepath2)
     disk.write(current_directory, dir_blk);                            // Write directory to disk
     write_fat_to_disk();
 
-    std::cout << "FS::append()... File appended successfully\n";
+    // std::cout << "FS::append()... File appended successfully\n";
     return 0;
 }
 
@@ -973,7 +986,37 @@ FS::pwd()
 int
 FS::chmod(std::string accessrights, std::string filepath)
 {
-    std::cout << "FS::chmod(" << accessrights << "," << filepath << ")\n";
+    // std::cout << "FS::chmod(" << accessrights << "," << filepath << ")\n";
+
+    int rights = std::stoi(accessrights);                              // convert the access rights to an integer
+
+    if (rights < 0 || rights > 7) {                                    // check if the access rights are valid
+        std::cerr << "FS::chmod()... Invalid access rights\n";
+        return -1;
+    }
+
+
+    uint8_t dir_blk[BLOCK_SIZE];                                      // create a block to store the directory
+    dir_entry* dir_entries = read_directory(dir_blk);                 // read the directory
+    if (!dir_entries) return -1;                                      // cast the block to dir_entry
+
+    // find the file in the directory
+    int file_index = find_entry_by_name(dir_entries, filepath);       // find the file in the directory
+    if (file_index == -1) {                                           // check if the file is found
+        std::cerr << "FS::chmod()... File not found\n";
+        return -1;
+    }
+
+    // update the access rights
+    dir_entries[file_index].access_rights = rights;                   // update the access rights
+
+    // write the directory to the disk
+    if (disk.write(current_directory, dir_blk) != 0) {                 // write the directory to the disk
+        std::cerr << "FS::chmod()... Error writing directory to disk\n";
+        return -1;
+    }
+
+    // std::cout << "FS::chmod()... Access rights updated successfully\n";
     return 0;
 }
 
@@ -1189,7 +1232,7 @@ std::vector<std::string> split_path(const std::string& path) {
     std::vector<std::string> result;
     std::stringstream ss(path);
     std::string item;
-    while (std::getline(ss, item, '/')) {
+    while (std::getline(ss, item, '/')) {               // split the path by '/'
         if (!item.empty()) result.push_back(item);
     }
     return result;
@@ -1283,4 +1326,14 @@ std::pair<int, std::string> FS::resolve_path(const std::string& path, bool is_di
     }
 
     return {current_block, last_component};
+}
+
+
+// helper function to get access rights as a string
+std::string FS::get_access_rights_str(uint8_t  rights) {
+    std::string result = "";
+    result += (rights & READ) ? "r" : "-";                  // check if the file has read access
+    result += (rights & WRITE) ? "w" : "-";                 // check if the file has write access
+    result += (rights & EXECUTE) ? "x" : "-";               // check if the file has execute access
+    return result;
 }
